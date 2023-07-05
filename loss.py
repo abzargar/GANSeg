@@ -1,5 +1,29 @@
 from torch import Tensor
 import torch
+import torch.nn.functional as F
+from torch.nn import Module
+
+
+class CombinedLoss(Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs, targets, smooth=1e-6):
+        # Compute Cross-Entropy (CE) loss
+        ce_loss = F.cross_entropy(inputs, targets)
+
+        # Compute Dice loss
+        inputs = F.softmax(inputs, dim=1)[:, 1]
+        targets = (targets == 1).float()  # One-hot encoding
+
+        intersection = (inputs * targets).sum()
+        dice_loss = 1 - ((2. * intersection + smooth) /
+                         (inputs.sum() + targets.sum() + smooth))
+
+        # Combine the losses
+        combined_loss = ce_loss + dice_loss
+
+        return combined_loss
 
 def multiclass_dice_coeff(input: Tensor, target: Tensor, reduce_batch_first: bool = False, epsilon=1e-6):
     # Average of Dice coefficient for all classes
@@ -9,12 +33,6 @@ def multiclass_dice_coeff(input: Tensor, target: Tensor, reduce_batch_first: boo
         dice += dice_coeff(input[:, channel, ...], target[:, channel, ...], reduce_batch_first, epsilon)
 
     return dice / input.shape[1]
-
-def dice_loss(input: Tensor, target: Tensor, multiclass: bool = False):
-    # Dice loss (objective to minimize) between 0 and 1
-    assert input.size() == target.size()
-    fn = multiclass_dice_coeff if multiclass else dice_coeff
-    return 1 - fn(input, target, reduce_batch_first=True)
 
 def dice_coeff(input: Tensor, target: Tensor, reduce_batch_first: bool = False, epsilon=1e-6):
     # Average of Dice coefficient for all batches, or for a single mask

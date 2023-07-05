@@ -6,7 +6,7 @@ from data import BasicDataset
 import itertools
 import torch.nn as nn
 from evaluate import evaluate_segmentation
-from loss import dice_loss
+from loss import CombinedLoss
 import torch.utils.data as data
 import torch.nn.functional as F
 import transforms as transforms
@@ -26,7 +26,7 @@ torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
 # The main training function
-def train(args,image_size = [512,768],image_means = [0.5],image_stds= [0.5],train_ratio = 0.85,save_checkpoint=True,p_vanilla=0.2,p_diff=0.2,train_aug_iter=1,patience=100):
+def train(args,image_size = [512,768],image_means = [0.5],image_stds= [0.5],train_ratio = 0.85,save_checkpoint=True,p_vanilla=0.2,p_diff=0.2,train_aug_iter=1,patience=200):
     # Set up the logging
     logging.basicConfig(filename=os.path.join(args.output_dir, 'train.log'), filemode='w',format='%(asctime)s - %(message)s', level=logging.INFO)
     logging.info('>>>> image size=(%d,%d) , learning rate=%f , batch size=%d' % (image_size[0], image_size[1],args.lr,args.batch_size))
@@ -52,12 +52,12 @@ def train(args,image_size = [512,768],image_means = [0.5],image_stds= [0.5],trai
                                transforms.Normalize(mean = image_means,std = image_stds)
                            ])
 
-    dev_transforms = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=image_means,std=image_stds)
-    ])
+    # dev_transforms = transforms.Compose([
+    #     transforms.ToPILImage(),
+    #     transforms.Resize(image_size),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=image_means,std=image_stds)
+    # ])
 
     # Define the datasets for training and validation
     train_data = BasicDataset(os.path.join(args.train_set_dir, 'images'),
@@ -65,7 +65,7 @@ def train(args,image_size = [512,768],image_means = [0.5],image_stds= [0.5],trai
                                           if_train_aug=True if p_vanilla>0 else False, train_aug_iter=train_aug_iter, ratio=train_ratio,
                                           dev=False)
     valid_data = BasicDataset(os.path.join(args.train_set_dir, 'images'),
-                                          os.path.join(args.train_set_dir, 'masks'),transforms=dev_transforms,
+                                          os.path.join(args.train_set_dir, 'masks'),transforms=train_transforms,
                                           if_train_aug=True if p_vanilla>0 else False, train_aug_iter=train_aug_iter,
                                           ratio=(1 - train_ratio),
                                           dev=True)
@@ -89,7 +89,7 @@ def train(args,image_size = [512,768],image_means = [0.5],image_stds= [0.5],trai
     # Define the loss functions
     d_criterion = nn.MSELoss()
     Gen_criterion = nn.L1Loss()
-    Seg_criterion = nn.CrossEntropyLoss()
+    Seg_criterion = CombinedLoss()
 
     # Move everything to the device
     Gen = Gen.to(device)
@@ -166,13 +166,8 @@ def train(args,image_size = [512,768],image_means = [0.5],image_stds= [0.5],trai
                 optimizer_G.zero_grad(set_to_none=True)
                 d_img_loss = d_criterion(D1(DiffAugment(fake_img,p=p_diff)), valid)
                 d_mask_loss = d_criterion(D2(fake_mask_p), valid)
-                rec_mask_loss=100 * (Seg_criterion(rec_mask, torch.squeeze(real_mask.to(dtype=torch.long), dim=1)) + dice_loss(
-                    F.softmax(rec_mask, dim=1).float(),
-                    F.one_hot(torch.squeeze(real_mask.to(dtype=torch.long), dim=1), Seg.n_classes).permute(0, 3, 1,2).float(),multiclass=True))
-
-                id_mask_loss = 50 * (Seg_criterion(fake_mask, torch.squeeze(real_mask.to(dtype=torch.long), dim=1)) + dice_loss(
-                    F.softmax(fake_mask, dim=1).float(),F.one_hot(torch.squeeze(real_mask.to(dtype=torch.long), dim=1), Seg.n_classes).permute(0, 3, 1,2).float(),multiclass=True))
-
+                rec_mask_loss=100 * Seg_criterion(rec_mask, torch.squeeze(real_mask.to(dtype=torch.long), dim=1))
+                id_mask_loss = 50 * Seg_criterion(fake_mask, torch.squeeze(real_mask.to(dtype=torch.long), dim=1))
                 rec_img_loss=100 * Gen_criterion(rec_img, real_img)
                 id_img_loss = 50 * Gen_criterion(fake_img, real_img)
                 g_loss=d_mask_loss+d_img_loss+rec_mask_loss+rec_img_loss+id_mask_loss+id_img_loss
@@ -234,7 +229,7 @@ if __name__ == "__main__":
     ap.add_argument("--max_epoch", default=1000, type=int, help="maximum epoch to train model")
     ap.add_argument("--batch_size", default=2, type=int, help="train batch size")
     ap.add_argument("--output_dir", required=True, type=str, help="path for saving the train log and best checkpoint")
-    ap.add_argument("--p_vanilla", default=0.5,type=float, help="probability value of vanilla augmentation")
+    ap.add_argument("--p_vanilla", default=0.6,type=float, help="probability value of vanilla augmentation")
     ap.add_argument("--p_diff", default=0.2,type=float, help="probability value of diff augmentation")
 
     # Parse the command-line arguments

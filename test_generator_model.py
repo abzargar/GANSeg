@@ -107,17 +107,12 @@ def test(args, image_size=[512, 768], image_means=[0.5], image_stds=[0.5], batch
 if __name__ == "__main__":
     # Argument parsing
     ap = argparse.ArgumentParser()
-    # ap.add_argument("--test_set_dir", required=True, type=str, help="path for the test dataset")
-    # ap.add_argument("--gen_ckpt_dir", required=True, type=str, help="path for the generator model checkpoint")
-    # ap.add_argument("--style_ckpt_dir", required=True, type=str, help="path for the style vectorizer model checkpoint")
-    # ap.add_argument("--output_dir", required=True, type=str, help="path for saving the test outputs")
+    ap.add_argument("--test_set_dir", required=True, type=str, help="path for the test dataset")
+    ap.add_argument("--gen_ckpt_dir", required=True, type=str, help="path for the generator model checkpoint")
+    ap.add_argument("--style_ckpt_dir", required=True, type=str, help="path for the style vectorizer model checkpoint")
+    ap.add_argument("--output_dir", required=True, type=str, help="path for saving the test outputs")
 
     args = ap.parse_args()
-    args.test_set_dir = '/home/azargari/GAN_1/large_stem_cell_dataset/test/'
-
-    args.gen_ckpt_dir = "/home/azargari/GAN_1/tmp/Gen.pth"
-    args.style_ckpt_dir = "/home/azargari/GAN_1/tmp/StyleNet.pth"
-    args.output_dir = '/home/azargari/GAN_1/test_results/'
 
     # Check if test dataset directory exists
     assert os.path.isdir(args.test_set_dir), 'No such file or directory: ' + args.test_set_dir
