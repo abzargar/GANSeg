@@ -8,12 +8,7 @@ from typing import Tuple, List, Optional
 from PIL import Image
 import torch
 from torch import Tensor
-
-try:
-    import accimage
-except ImportError:
-    accimage = None
-
+import torchvision
 
 from torchvision.transforms import functional as F
 
@@ -118,7 +113,7 @@ class Normalize(torch.nn.Module):
 
 
 class Resize(torch.nn.Module):
-    def __init__(self, size, img_interpolation=Image.BILINEAR,mask_interpolation=Image.NEAREST):
+    def __init__(self, size, img_interpolation=torchvision.transforms.InterpolationMode.BILINEAR,mask_interpolation=torchvision.transforms.InterpolationMode.NEAREST):
         super().__init__()
         if not isinstance(size, (int, Sequence)):
             raise TypeError("Size should be int or sequence. Got {}".format(type(size)))
@@ -273,7 +268,7 @@ class RandomCrop(torch.nn.Module):
             img = F.pad(img, self.padding, self.fill, self.padding_mode)
 
         width, height = F.get_image_size(img)
-        self.size=[int(0.65*height),int(0.65*width)]
+        self.size=[int(0.85*height),int(0.85*width)]
         # pad the width if needed
         if self.pad_if_needed and width < self.size[1]:
             padding = [self.size[1] - width, 0]

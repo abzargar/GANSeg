@@ -4,8 +4,6 @@ import numpy as np
 from torchvision.models import inception_v3
 from scipy.linalg import sqrtm
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 DATA_LOADER_SEED = 9
 random.seed(DATA_LOADER_SEED)
@@ -203,8 +201,4 @@ def mixed_list(n, layers, latent_dim, device):
 def image_noise(n, im_size, device):
     return torch.FloatTensor(n, im_size[0], im_size[1], 1).uniform_(0., 1.).cuda(device)
 
-def latent_to_w(style_vectorizer, latent_descr):
-    return [(style_vectorizer(z), num_layers) for z, num_layers in latent_descr]
 
-def styles_def_to_tensor(styles_def):
-    return torch.cat([t[:, None, :].expand(-1, n, -1) for t, n in styles_def], dim=1)

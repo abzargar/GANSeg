@@ -5,6 +5,7 @@ import transforms as transforms
 import numpy as np
 import argparse
 import random
+import torch.nn as nn
 from models import Segmentation  # Import the Segmentation model
 from data import BasicDataset  # Import the Dataset handling module
 import torch
@@ -40,12 +41,11 @@ def test(args, image_size=[512, 768], image_means=[0.5], image_stds=[0.5], batch
     test_iterator = data.DataLoader(test_data, batch_size=batch_size, shuffle=False)
 
     # Create an instance of the Segmentation model and load the trained model
-    model = Segmentation(n_channels=1, n_classes=2, bilinear=True)
-    model.load_state_dict(torch.load(args.ckpt_dir))
-    model = model.to(device)
+    Seg = nn.DataParallel(Segmentation(n_channels=1, n_classes=2, bilinear=True)).to(device)
+    Seg.load_state_dict(torch.load(args.seg_ckpt_dir))
 
     # Evaluate the model and calculate the dice score and average precision
-    dice_score, test_avg_precision = evaluate_segmentation(model, test_iterator, device, len(test_data),
+    dice_score, test_avg_precision = evaluate_segmentation(Seg, test_iterator, device, len(test_data),
                                                            is_avg_prec=True, prec_thresholds=[0.5, 0.6, 0.7, 0.8, 0.9],
                                                            output_dir=args.output_dir)
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     # Define the argument parser
     ap = argparse.ArgumentParser()
     ap.add_argument("--test_set_dir", required=True, type=str, help="path for the test dataset")
-    ap.add_argument("--ckpt_dir", required=True, type=str, help="path for the checkpoint of segmentation model to test")
+    ap.add_argument("--seg_ckpt_dir", required=True, type=str, help="path for the checkpoint of segmentation model to test")
     ap.add_argument("--output_dir", required=True, type=str, help="path for saving the test outputs")
 
     # Parse the command-line arguments
@@ -69,8 +69,10 @@ if __name__ == "__main__":
     assert os.path.isdir(args.test_set_dir), 'No such file or directory: ' + args.test_set_dir
 
     # If output directory doesn't exist, create it
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, 'input_images'), exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, 'segmentation_predictions'), exist_ok=True)
+
 
     # Run the test function
     test(args)

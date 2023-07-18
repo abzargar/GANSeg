@@ -238,8 +238,12 @@ class style_decoder_block(nn.Module):
 
 
 class StyleUnetGenerator(nn.Module):
-    def __init__(self):
+    def __init__(self,style_latent_dim=128,style_depth=3,style_lr_mul=0.1):
         super().__init__()
+
+        """ StyleNet """
+        self.latent_dim=style_latent_dim
+        self.StyleNet = StyleVectorizer(emb=style_latent_dim, depth=style_depth, lr_mul=style_lr_mul)
 
         """ Encoder """
         self.e1 = encoder_block(1, 64)
@@ -259,7 +263,16 @@ class StyleUnetGenerator(nn.Module):
         """ Classifier """
         self.outputs = nn.Conv2d(64, 1, kernel_size=1, padding=0)
 
-    def forward(self, inputs,styles, input_noise):
+    def latent_to_w(self,style_vectorizer, latent_descr):
+        return [(style_vectorizer(z), num_layers) for z, num_layers in latent_descr]
+
+    def styles_def_to_tensor(self,styles_def):
+        return torch.cat([t[:, None, :].expand(-1, n, -1) for t, n in styles_def], dim=1)
+
+    def forward(self, inputs,style, input_noise):
+        """ StyleNet """
+        w_space = self.latent_to_w(self.StyleNet, style)
+        w_styles = self.styles_def_to_tensor(w_space)
 
         """ Encoder """
         s1, p1 = self.e1(inputs)
@@ -269,7 +282,7 @@ class StyleUnetGenerator(nn.Module):
 
         """ Bottleneck """
         b = self.b(p4)
-        styles = styles.transpose(0, 1)
+        styles = w_styles.transpose(0, 1)
 
         """ Decoder """
         d1 = self.d1(b, s4,styles[0], input_noise)
@@ -378,3 +391,88 @@ class StyleVectorizer(nn.Module):
     def forward(self, x):
         x = F.normalize(x, dim=1)
         return self.net(x)
+
+
+
+class conv_block(nn.Module):
+    def __init__(self, in_c, out_c):
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(in_c, out_c, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(out_c)
+
+        self.conv2 = nn.Conv2d(out_c, out_c, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(out_c)
+
+        self.relu = nn.LeakyReLU()
+
+    def forward(self, inputs):
+        x = self.conv1(inputs)
+        x = self.bn1(x)
+        x = self.relu(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+
+        return x
+
+class decoder_block(nn.Module):
+    def __init__(self, in_c, out_c):
+        super().__init__()
+
+        self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0)
+        self.conv = conv_block(out_c+out_c, out_c)
+
+    def forward(self, inputs, skip):
+        x = self.up(inputs)
+        x = torch.cat([x, skip], axis=1)
+        x = self.conv(x)
+
+        return x
+
+class UnetSegmentation(nn.Module):
+    def __init__(self, n_channels=1, n_classes=1):
+        super(UnetSegmentation, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.latent_dim=128
+        """ Encoder """
+        self.e1 = encoder_block(n_channels, 64)
+        self.e2 = encoder_block(64, 128)
+        self.e3 = encoder_block(128, 256)
+        self.e4 = encoder_block(256, 512)
+
+        """ Bottleneck """
+        self.b = en_conv_block(512, 1024)
+
+        """ Decoder """
+        self.d1 = decoder_block(1024, 512)
+        self.d2 = decoder_block(512, 256)
+        self.d3 = decoder_block(256, 128)
+        self.d4 = decoder_block(128, 64)
+
+        """ Classifier """
+        self.outputs = nn.Conv2d(64, n_classes, kernel_size=1, padding=0)
+
+    def forward(self, inputs,style, input_noise):
+        """ Encoder """
+        s1, p1 = self.e1(inputs)
+        s2, p2 = self.e2(p1)
+        s3, p3 = self.e3(p2)
+        s4, p4 = self.e4(p3)
+
+        """ Bottleneck """
+        b = self.b(p4)
+
+        """ Decoder """
+        d1 = self.d1(b, s4)
+        d2 = self.d2(d1, s3)
+        d3 = self.d3(d2, s2)
+        d4 = self.d4(d3, s1)
+
+        """ Classifier """
+        outputs = self.outputs(d4)
+
+        return outputs
+

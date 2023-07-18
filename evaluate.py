@@ -25,14 +25,14 @@ def evaluate_segmentation(net, valid_iterator, device,n_valid_examples,is_avg_pr
             true_masks = true_masks.to(device=device, dtype=torch.long)
             true_masks = torch.squeeze(true_masks, dim=1)
             true_masks_copy = copy.deepcopy(true_masks)
-            true_masks = F.one_hot(true_masks, net.n_classes).permute(0, 3, 1, 2).float()
+            true_masks = F.one_hot(true_masks, net.module.n_classes).permute(0, 3, 1, 2).float()
 
             with torch.no_grad():
                 # predict the mask
                 mask_pred = net(images_device)
                 # convert to one-hot format
                 mask_pred_copy = copy.deepcopy(mask_pred.argmax(dim=1))
-                mask_pred = F.one_hot(mask_pred.argmax(dim=1), net.n_classes).permute(0, 3, 1, 2).float()
+                mask_pred = F.one_hot(mask_pred.argmax(dim=1), net.module.n_classes).permute(0, 3, 1, 2).float()
                 # compute the Dice score, ignoring background
                 dice_score += multiclass_dice_coeff(mask_pred[:, 1:, ...], true_masks[:, 1:, ...],
                                                     reduce_batch_first=False)
@@ -47,7 +47,7 @@ def evaluate_segmentation(net, valid_iterator, device,n_valid_examples,is_avg_pr
                             img=images[i].cpu().numpy()[0, :, :]
                             img=(img-np.min(img))/(np.max(img)-np.min(img))*255
                             overlay_img = visualize_segmentation(pred, inp_img=img, overlay_img=True)
-                            cv2.imwrite(os.path.join(output_dir,'input_segmentation_images','images_{:04d}.png'.format(batch_idx*true_masks_copy.shape[0]+i)),img)
+                            cv2.imwrite(os.path.join(output_dir,'input_images','images_{:04d}.png'.format(batch_idx*true_masks_copy.shape[0]+i)),img)
                             cv2.imwrite(os.path.join(output_dir, 'segmentation_predictions', 'images_{:04d}.png'.format(batch_idx*true_masks_copy.shape[0]+ i)),overlay_img)
 
                         pred_list.append(pred)
@@ -80,7 +80,7 @@ def evaluate_tracker(net, valid_iterator, device,n_valid_examples,is_avg_prec=Fa
             true_masks = true_masks.to(device=device, dtype=torch.long)
             true_masks = torch.squeeze(true_masks, dim=1)
             true_masks_copy = copy.deepcopy(true_masks)
-            true_masks = F.one_hot(true_masks, net.n_classes).permute(0, 3, 1, 2).float()
+            true_masks = F.one_hot(true_masks, net.module.n_classes).permute(0, 3, 1, 2).float()
 
             with torch.no_grad():
                 # predict the mask
@@ -89,7 +89,7 @@ def evaluate_tracker(net, valid_iterator, device,n_valid_examples,is_avg_prec=Fa
                 # convert to one-hot format
                 mask_pred_copy = copy.deepcopy(mask_pred.argmax(dim=1))
                 # edge_pred_copy = copy.deepcopy(edge_pred.argmax(dim=1))
-                mask_pred = F.one_hot(mask_pred.argmax(dim=1), net.n_classes).permute(0, 3, 1, 2).float()
+                mask_pred = F.one_hot(mask_pred.argmax(dim=1), net.module.n_classes).permute(0, 3, 1, 2).float()
                 # compute the Dice score, ignoring background
                 dice_score += multiclass_dice_coeff(mask_pred[:, 1:, ...], true_masks[:, 1:, ...],
                                                         reduce_batch_first=False)

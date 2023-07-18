@@ -2,12 +2,13 @@
 import argparse
 from data import BasicDataset
 import cv2
-from models import StyleUnetGenerator, StyleVectorizer
-from utils import set_requires_grad, mixed_list, noise_list, image_noise, latent_to_w, styles_def_to_tensor
+from models import StyleUnetGenerator
+from utils import set_requires_grad, mixed_list, noise_list, image_noise
 import torch.utils.data as data
 import transforms as transforms
 import torch
 import numpy as np
+import torch.nn as nn
 import os
 import random
 from tqdm import tqdm
@@ -31,7 +32,7 @@ def save_images(args, real_img_list, fake_img_list, real_A_list):
     for i, (real_img, gen_img, mask_img) in enumerate(zip(real_img_list, fake_img_list, real_A_list)):
         cv2.imwrite(os.path.join(args.output_dir, 'real_images', 'images_{:04d}.png'.format(i)), real_img * 255)
         cv2.imwrite(os.path.join(args.output_dir, 'gen_images', 'images_{:04d}.png'.format(i)), gen_img * 255)
-        cv2.imwrite(os.path.join(args.output_dir, 'mask_images', 'images_{:04d}.png'.format(i)), mask_img * 255)
+        cv2.imwrite(os.path.join(args.output_dir, 'real_masks', 'images_{:04d}.png'.format(i)), mask_img * 255)
 
 
 def reshape_and_repeat(images_list, image_size):
@@ -58,15 +59,11 @@ def test(args, image_size=[512, 768], image_means=[0.5], image_stds=[0.5], batch
     test_iterator = data.DataLoader(test_data, batch_size=batch_size, shuffle=False)
 
     # Load the models
-    Gen = StyleUnetGenerator().to(device)
+    Gen = nn.DataParallel(StyleUnetGenerator(style_latent_dim = 128)).to(device)
     Gen.load_state_dict(torch.load(args.gen_ckpt_dir))
-
-    StyleNet = StyleVectorizer(128, depth=3, lr_mul=0.1).to(device)  # latent_dim set to 128
-    StyleNet.load_state_dict(torch.load(args.style_ckpt_dir))
 
     # Set the models to evaluation mode
     Gen.eval()
-    StyleNet.eval()
 
     real_img_list=[]
     real_A_list=[]
@@ -82,9 +79,8 @@ def test(args, image_size=[512, 768], image_means=[0.5], image_stds=[0.5], batch
         with torch.no_grad():
             style = mixed_list(real_img.shape[0], 5, 128, device=device) if random.random() < 0.9 else noise_list(real_img.shape[0], 5, 128, device=device)  # latent_dim set to 128
             im_noise = image_noise(real_mask.shape[0], image_size, device=device)
-            w_styles = styles_def_to_tensor(latent_to_w(StyleNet, style))
 
-            fake_img = Gen(real_mask, w_styles, im_noise)
+            fake_img = Gen(real_mask, style, im_noise)
             fake_img = normalize_image(fake_img.cpu().numpy()[0,0,:,:])
             real_img = normalize_image(real_img.cpu().numpy()[0, 0, :, :])
             real_mask = normalize_image(real_mask.cpu().numpy()[0, 0, :, :])
@@ -109,7 +105,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--test_set_dir", required=True, type=str, help="path for the test dataset")
     ap.add_argument("--gen_ckpt_dir", required=True, type=str, help="path for the generator model checkpoint")
-    ap.add_argument("--style_ckpt_dir", required=True, type=str, help="path for the style vectorizer model checkpoint")
     ap.add_argument("--output_dir", required=True, type=str, help="path for saving the test outputs")
 
     args = ap.parse_args()
@@ -119,6 +114,8 @@ if __name__ == "__main__":
 
     # Create output directory if it does not exist
     os.makedirs(args.output_dir, exist_ok=True)
-
+    os.makedirs(os.path.join(args.output_dir, 'real_images'), exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, 'gen_images'), exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, 'real_masks'), exist_ok=True)
     # Call the test function
     test(args)
