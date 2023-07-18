@@ -24,20 +24,20 @@ pip install -r requirements.txt
 Run train.py with the train set of segmentation dataset (the same format of dataset examples above)
 ```
 Example:
-python train.py --train_set_dir  segmentation_dataset/train/  --lr 0.0001 --p_vanilla 0.5 --p_diff 0.2 --output_dir tmp/
+python train.py --train_set_dir  segmentation_dataset/train/  --lr 0.0001 --p_vanilla 0.2 --p_diff 0.2 --output_dir tmp/
 ```
 
 * #### Run the segmentation model test
 Run test_segmentation_model.py with the test set of segmentation dataset and the segmentation checkpoint
 ```
 Example:
-python test_segmentation_model.py --test_set_dir segmentation_dataset/test/ --ckpt_dir trained_models/Seg.pth --output_dir tmp/
+python test_segmentation_model.py --test_set_dir segmentation_dataset/test/ --seg_ckpt_dir trained_models/Seg.pth --output_dir tmp/
 ```
 * #### Run the generator model test
 Run test_generator_model.py with the test set of segmentation dataset and the generator checkpoints
 ```
 Example:
-python test_generator_model.py --test_set_dir segmentation_dataset/test --gen_ckpt_dir trained_models/Gen.pth --style_ckpt_dir trained_models/StyleNet.pth --output_dir tmp/
+python test_generator_model.py --test_set_dir segmentation_dataset/test --gen_ckpt_dir trained_models/Gen.pth --output_dir tmp/
 ```
 
 ### Useful Information
